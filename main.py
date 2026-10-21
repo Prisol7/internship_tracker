@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # internship tracker bc my spreadsheet was getting out of hand lol
-# uses sqlite so no mysql server needed
+# uses sqlite so i dont need to set up external db
+#todo:
+# - set up support for external db
+# - find libraires to show more stuff on terminal
+# - 
 
 import sqlite3
 import csv
@@ -9,7 +13,6 @@ from pathlib import Path
 import os
 import sys
 
-# keep the db and stuff next to the script so it dosent matter where u run it from
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "internship_tracker.db"
 EXPORT_DIR = BASE_DIR / "exports"
@@ -27,7 +30,6 @@ STATUSES = [
     "Withdrawn",
 ]
 
-# (db column, what the user sees)
 EDITABLE_FIELDS = [
     ("company", "Company"),
     ("internship_title", "Internship Title"),
@@ -35,8 +37,7 @@ EDITABLE_FIELDS = [
     ("date", "Date"),
     ("status", "Status"),
 ]
-
-# has to be a raw string or the backslashes break everything. ask me how i know
+'this is broken, fix later'
 LOGO = r"""
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
@@ -60,11 +61,8 @@ class InternshipTracker:
 
     def connect_database(self):
         try:
-            print("\n📊 Setting up database...")
-
-            # makes the file if its not there
+            print("\nSetting up database...")
             self.connection = sqlite3.connect(self.db_path)
-            # so i can do app["company"] instead of app[1] like a caveman
             self.connection.row_factory = sqlite3.Row
             self.cursor = self.connection.cursor()
 
@@ -92,9 +90,6 @@ class InternshipTracker:
 
     def clear_screen(self):
         os.system('clear' if os.name != 'nt' else 'cls')
-
-    # ---- printing stuff ----
-
     def print_header(self, title):
         print("\n" + "="*60)
         print(f"           {title}")
@@ -133,10 +128,6 @@ class InternshipTracker:
         print("9. 🚪 Exit")
         print("\n" + "="*60)
 
-    # ---- input stuff ----
-
-    # keeps asking till u give a real YYYY-MM-DD date
-    # blank = today, or None if default_today is off
     def prompt_date(self, prompt, default_today=True):
         while True:
             date_str = input(prompt).strip()
@@ -148,7 +139,6 @@ class InternshipTracker:
             except ValueError:
                 print("❌ Invalid date format! Please use YYYY-MM-DD.")
 
-    # blank returns the default, None = cancel
     def prompt_status(self, default=None):
         print("\nStatus Options:")
         for i, status in enumerate(STATUSES, 1):
@@ -161,13 +151,12 @@ class InternshipTracker:
                 return default
             if choice.isdigit() and 1 <= int(choice) <= len(STATUSES):
                 return STATUSES[int(choice) - 1]
-            # lets u type it out too, caps dont matter
+
             for status in STATUSES:
                 if choice.lower() == status.lower():
                     return status
             print("❌ Invalid choice! Pick a number from the list.")
 
-    # returns the row or None if it doesnt exist
     def find_application(self, action):
         app_id = input(f"Enter Application ID to {action}: ").strip()
         if not app_id.isdigit():
@@ -177,10 +166,9 @@ class InternshipTracker:
         self.cursor.execute("SELECT * FROM applications WHERE id = ?", (int(app_id),))
         app = self.cursor.fetchone()
         if not app:
-            print(f"❌ No application found with ID: {app_id}")
+            print(f"❌ no application found with ID: {app_id}")
         return app
 
-    # ---- the actual menu options ----
 
     def insert_application(self):
         self.print_header("📝 INSERT NEW APPLICATION")
@@ -191,7 +179,6 @@ class InternshipTracker:
                 print("❌ Company name cannot be empty!")
                 return
 
-            # its always swe intern anyway lmao
             title = input("Internship Title (default: Software Engineer Intern): ").strip()
             if not title:
                 title = "Software Engineer Intern"
@@ -242,7 +229,6 @@ class InternshipTracker:
             return
 
         try:
-            # LIKE isnt case sensitive in sqlite which is nice, % = wildcard
             pattern = f"%{term}%"
             self.cursor.execute("""
                 SELECT * FROM applications
@@ -297,13 +283,9 @@ class InternshipTracker:
             else:
                 new_value = input(f"Enter new {label}: ").strip()
 
-            # job code can be blank, everything else cant
             if not new_value and column != "job_code":
                 print("❌ Edit cancelled.")
                 return
-
-            # f string in sql is fine here i promise, column only comes from EDITABLE_FIELDS not the user
-            # (no bobby tables today)
             self.cursor.execute(f"UPDATE applications SET {column} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                                 (new_value, app["id"]))
             self.connection.commit()
@@ -334,8 +316,6 @@ class InternshipTracker:
 
         except sqlite3.Error as e:
             print(f"❌ Error deleting application: {e}")
-
-    # how many in each status aka how many rejections ive collected 💀
     def show_stats(self):
         self.print_header("📈 APPLICATION STATS")
 
@@ -358,8 +338,6 @@ class InternshipTracker:
         except sqlite3.Error as e:
             print(f"❌ Error loading stats: {e}")
 
-    # dumps everything to a csv in exports/ with a timestamp
-    # gives back (path, count) or (None, 0) if theres nothing
     def export_csv(self, prefix="internship_applications"):
         self.cursor.execute("""
             SELECT id, company, internship_title, job_code, date, status
@@ -397,8 +375,6 @@ class InternshipTracker:
             print(f"❌ Error downloading applications: {e}")
         except OSError as e:
             print(f"❌ Error writing CSV file: {e}")
-
-    # new recruiting season new me. backs up + archives the old db and starts fresh
     def start_new_season(self):
         self.print_header("🌱 START NEW SEASON")
 
@@ -418,7 +394,6 @@ class InternshipTracker:
             if path:
                 print(f"💾 Exported {count} applications to: {path}")
 
-            # gotta close it first or windows wont let u move the file
             self.close()
             ARCHIVE_DIR.mkdir(exist_ok=True)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -431,7 +406,9 @@ class InternshipTracker:
             print(f"❌ Error starting new season: {e}")
             print("Your existing data was left in place.")
 
-        # reconnect either way. if it worked u get a fresh db, if not it just reopens the old one
+
+
+
         self.close()
         if not self.connect_database():
             print("\n❌ Failed to connect to database. Exiting...")
